@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sherlock OSINT — Find Anyone Online</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0a0a0f;
+      color: #e0e0e0;
+      min-height: 100vh;
+    }
+
+    .hero {
+      text-align: center;
+      padding: 60px 20px 40px;
+      background: linear-gradient(180deg, #12121a 0%, #0a0a0f 100%);
+    }
+
+    .hero h1 {
+      font-size: 2.5rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, #00d4ff, #7b2fff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 10px;
+    }
+
+    .hero p {
+      color: #888;
+      font-size: 1.1rem;
+    }
+
+    .search-box {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 0 20px;
+    }
+
+    .tab-row {
+      display: flex;
+      gap: 4px;
+      background: #1a1a25;
+      border-radius: 12px;
+      padding: 4px;
+      margin-bottom: 16px;
+    }
+
+    .tab {
+      flex: 1;
+      padding: 10px;
+      background: none;
+      border: none;
+      color: #888;
+      cursor: pointer;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+
+    .tab.active {
+      background: #2a2a3a;
+      color: #00d4ff;
+    }
+
+    .input-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .input-row input {
+      flex: 1;
+      padding: 14px 18px;
+      background: #1a1a25;
+      border: 2px solid #2a2a3a;
+      border-radius: 12px;
+      color: #fff;
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .input-row input:focus {
+      border-color: #00d4ff;
+    }
+
+    .input-row input::placeholder {
+      color: #555;
+    }
+
+    .scan-btn {
+      padding: 14px 28px;
+      background: linear-gradient(135deg, #00d4ff, #7b2fff);
+      border: none;
+      border-radius: 12px;
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+
+    .scan-btn:hover { opacity: 0.9; }
+    .scan-btn:active { transform: scale(0.97); }
+    .scan-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .results-area {
+      max-width: 900px;
+      margin: 40px auto;
+      padding: 0 20px;
+    }
+
+    .progress {
+      text-align: center;
+      padding: 40px;
+      display: none;
+    }
+
+    .progress.visible { display: block; }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid #2a2a3a;
+      border-top-color: #00d4ff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 16px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .progress p { color: #888; font-size: 0.95rem; }
+
+    .stats-row {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+
+    .stat-card {
+      flex: 1;
+      min-width: 120px;
+      background: #12121a;
+      border: 1px solid #2a2a3a;
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .stat-card .num {
+      font-size: 2rem;
+      font-weight: 800;
+      color: #00d4ff;
+    }
+
+    .stat-card .label {
+      color: #666;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-top: 4px;
+    }
+
+    .accounts-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #12121a;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .accounts-table th {
+      background: #1a1a25;
+      color: #888;
+      padding: 12px 16px;
+      text-align: left;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .accounts-table td {
+      padding: 12px 16px;
+      border-top: 1px solid #1a1a25;
+      font-size: 0.9rem;
+    }
+
+    .accounts-table tr:hover td {
+      background: #1a1a25;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+
+    .badge-found { background: #0a3a2a; color: #00ff88; }
+    .badge-unknown { background: #2a2a1a; color: #ffaa00; }
+    .badge-available { background: #1a1a2a; color: #888; }
+
+    .accounts-table a {
+      color: #00d4ff;
+      text-decoration: none;
+    }
+
+    .accounts-table a:hover { text-decoration: underline; }
+
+    .phone-result, .ip-result {
+      background: #12121a;
+      border: 1px solid #2a2a3a;
+      border-radius: 12px;
+      padding: 24px;
+      margin-top: 24px;
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .info-item label {
+      color: #555;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .info-item span {
+      color: #e0e0e0;
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    .footer {
+      text-align: center;
+      padding: 40px 20px;
+      color: #444;
+      font-size: 0.8rem;
+    }
+
+    .footer a { color: #555; }
+  </style>
+</head>
+<body>
+
+  <div class="hero">
+    <h1>Sherlock OSINT</h1>
+    <p>Find anyone across 500+ social platforms — username, phone, or IP</p>
+  </div>
+
+  <div class="search-box">
+    <div class="tab-row">
+      <button class="tab active" data-type="username" onclick="setTab('username')">👤 Username</button>
+      <button class="tab" data-type="phone" onclick="setTab('phone')">📱 Phone</button>
+      <button class="tab" data-type="ip" onclick="setTab('ip')">🌐 IP Address</button>
+    </div>
+    <div class="input-row">
+      <input type="text" id="searchInput" placeholder="e.g. elonmusk or @elonmusk" autofocus>
+      <button class="scan-btn" id="scanBtn" onclick="doScan()">Scan →</button>
+    </div>
+  </div>
+
+  <div class="results-area">
+    <div class="progress" id="progress">
+      <div class="spinner"></div>
+      <p id="progressText">Scanning...</p>
+    </div>
+    <div id="results"></div>
+  </div>
+
+  <div class="footer">
+    Sherlock OSINT Suite — Powered by Maigret + GhostTrack + IPGeo &nbsp;|&nbsp;
+    <a href="https://github.com/jvanleur2234-glitch/sherlock-osint" target="_blank">GitHub</a>
+  </div>
+
+<script>
+  const API = "http://localhost:5012";
+  let currentType = "username";
+
+  function setTab(type) {
+    currentType = type;
+    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+    document.querySelector(`[data-type="${type}"]`).classList.add("active");
+    const placeholders = { username: "e.g. elonmusk or @elonmusk", phone: "e.g. +14155551212", ip: "e.g. 8.8.8.8" };
+    document.getElementById("searchInput").placeholder = placeholders[type];
+    document.getElementById("results").innerHTML = "";
+  }
+
+  async function doScan() {
+    const val = document.getElementById("searchInput").value.trim();
+    if (!val) return;
+    const btn = document.getElementById("scanBtn");
+    const progress = document.getElementById("progress");
+    const results = document.getElementById("results");
+    btn.disabled = true;
+    progress.classList.add("visible");
+    results.innerHTML = "";
+
+    try {
+      const r = await fetch(`${API}/api/sherlock/scan`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: currentType, value: val })
+      });
+      const data = await r.json();
+
+      if (data.status === "error") {
+        results.innerHTML = `<p style="color:#ff4444;padding:20px">${data.message}</p>`;
+      } else if (data.job_id) {
+        document.getElementById("progressText").textContent = `Job started — polling results...`;
+        await pollResults(data.job_id);
+      } else {
+        renderDirect(data);
+      }
+    } catch (e) {
+      results.innerHTML = `<p style="color:#ff4444;padding:20px">Could not reach Sherlock API. Make sure it's running on localhost:5012</p>`;
+    }
+
+    progress.classList.remove("visible");
+    btn.disabled = false;
+  }
+
+  async function pollResults(jobId) {
+    for (let i = 0; i < 120; i++) {
+      await sleep(2000);
+      const r = await fetch(`${API}/api/sherlock/status/${jobId}`);
+      const d = await r.json();
+      if (d.status === "done") { renderResults(d); return; }
+      if (d.status === "error") { document.getElementById("results").innerHTML = `<p style="color:#ff4444;padding:20px">${d.message}</p>`; return; }
+      document.getElementById("progressText").textContent = `Scanning... found ${d.found || 0} accounts (${i*2}s)`;
+    }
+    document.getElementById("progressText").textContent = "Timed out — try again";
+  }
+
+  function renderResults(d) {
+    const found = d.accounts || [];
+    let html = `<div class="stats-row">
+      <div class="stat-card"><div class="num">${found.length}</div><div class="label">Found</div></div>
+      <div class="stat-card"><div class="num">${d.total || 500}</div><div class="label">Sites Scanned</div></div>
+    </div>`;
+
+    if (found.length > 0) {
+      html += `<table class="accounts-table">
+        <thead><tr><th>Platform</th><th>Username Found</th><th>Status</th><th>Link</th></tr></thead><tbody>`;
+      found.forEach(a => {
+        html += `<tr>
+          <td>${a.name}</td>
+          <td>${a.username}</td>
+          <td><span class="badge badge-found">${a.exists}</span></td>
+          <td><a href="${a.url_user}" target="_blank">${a.exists === 'Claimed' ? 'View Profile' : 'Check'}</a></td>
+        </tr>`;
+      });
+      html += `</tbody></table>`;
+    } else {
+      html += `<p style="color:#888;padding:20px;text-align:center">No accounts found for this username.</p>`;
+    }
+    document.getElementById("results").innerHTML = html;
+  }
+
+  function renderDirect(data) {
+    let html = `<div class="phone-result ip-result">`;
+    const items = Object.entries(data).filter(([k]) => !k.startsWith("_"));
+    if (items.length > 0) {
+      html += `<div class="info-grid">`;
+      items.forEach(([k, v]) => {
+        html += `<div class="info-item"><label>${k.replace(/_/g," ").toUpperCase()}</label><span>${v || "—"}</span></div>`;
+      });
+      html += `</div>`;
+    }
+    html += `</div>`;
+    document.getElementById("results").innerHTML = html;
+  }
+
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+  document.getElementById("searchInput").addEventListener("keydown", e => { if (e.key === "Enter") doScan(); });
+</script>
+</body>
+</html>
